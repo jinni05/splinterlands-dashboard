@@ -12,7 +12,7 @@ import {
   CLink
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-
+import { connect } from 'react-redux';
 // routes config
 import routes from '../routes'
 
@@ -20,12 +20,13 @@ import {
   TheHeaderDropdown,
   TheHeaderDropdownMssg,
   TheHeaderDropdownNotif,
-  TheHeaderDropdownTasks
+  TheHeaderDropdownTasks,
+  TheHeaderDropdownPrice
 } from './index'
 
 const TheHeader = () => {
   const dispatch = useDispatch()
-  const sidebarShow = useSelector(state => state.sidebarShow)
+  const sidebarShow = useSelector(state => state.sidebar.sidebarShow)
 
   const toggleSidebar = () => {
     const val = [true, 'responsive'].includes(sidebarShow) ? false : 'responsive'
@@ -65,12 +66,13 @@ const TheHeader = () => {
         </CHeaderNavItem> */}
       </CHeaderNav>
 
-      {/* <CHeaderNav className="px-3">
-        <TheHeaderDropdownNotif />
+      <CHeaderNav className="px-3">
+        <TheHeaderDropdownPrice />
+        {/* <TheHeaderDropdownNotif />
         <TheHeaderDropdownTasks />
         <TheHeaderDropdownMssg />
-        <TheHeaderDropdown />
-      </CHeaderNav> */}
+        <TheHeaderDropdown /> */}
+      </CHeaderNav>
 
       <CSubheader className="px-3 justify-content-between">
         <CBreadcrumbRouter

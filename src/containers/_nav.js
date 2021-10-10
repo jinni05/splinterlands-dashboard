@@ -12,10 +12,16 @@ const _nav = [
       text: 'NEW',
     }
   },
-  // {
-  //   _tag: 'CSidebarNavTitle',
-  //   _children: ['Theme']
-  // },
+  {
+    _tag: 'CSidebarNavTitle',
+    _children: ['Theme']
+  },
+  {
+    _tag: 'CSidebarNavItem',
+    name: 'Game Settings',
+    to: '/settings/gamesettings',
+    icon: 'cil-drop',
+  },
   // {
   //   _tag: 'CSidebarNavItem',
   //   name: 'Colors',

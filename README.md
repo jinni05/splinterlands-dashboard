@@ -1,6 +1,6 @@
 # Splinterlands Dashboard
 
-- View report multiple accounts splinterlands. Feel free to give suggestions for features/code refurbishing via github or on telegram chat.
+- View report multiple accounts (check collection power, ecr fast...) splinterlands. Feel free to give suggestions for features/code refurbishing via github or on telegram chat.
 
 ## New Feature
 

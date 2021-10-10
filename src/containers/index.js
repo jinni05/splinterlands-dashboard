@@ -4,6 +4,7 @@ import TheHeader from './TheHeader'
 import TheHeaderDropdown from './TheHeaderDropdown'
 import TheHeaderDropdownMssg from './TheHeaderDropdownMssg'
 import TheHeaderDropdownNotif from './TheHeaderDropdownNotif'
+import TheHeaderDropdownPrice from './TheHeaderDropdownPrice'
 import TheHeaderDropdownTasks from './TheHeaderDropdownTasks'
 import TheLayout from './TheLayout'
 import TheSidebar from './TheSidebar'
@@ -15,6 +16,7 @@ export {
   TheHeaderDropdown,
   TheHeaderDropdownMssg,
   TheHeaderDropdownNotif,
+  TheHeaderDropdownPrice,
   TheHeaderDropdownTasks,
   TheLayout,
   TheSidebar

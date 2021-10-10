@@ -1,33 +1,48 @@
-import React, { lazy } from 'react';
-
+import React from 'react';
 import {
   CBadge,
-  // CButton,
-  // CButtonGroup,
+  CButton,
   CCard,
   CCardBody,
-  // CCardFooter,
+  CCollapse,
   CCardHeader,
   CCol,
-  // CProgress,
   CRow,
-  // CCallout,
   CDataTable,
+  CModal,
+  CModalBody,
+  CModalFooter,
+  CModalHeader,
+  CModalTitle,
 } from '@coreui/react'
 import {
   CWidgetDropdown,
-  CDropdown,
-  CDropdownMenu,
-  CDropdownItem,
-  CDropdownToggle
 } from '@coreui/react'
-import CIcon from '@coreui/icons-react'
 import ChartLineSimple from '../charts/ChartLineSimple'
-import ChartBarSimple from '../charts/ChartBarSimple'
 
 const axios = require('axios');
-// const WidgetsDropdown = lazy(() => import('../widgets/WidgetsDropdown.js'))
-const fields = ['No', 'name', 'rating', 'collection_power', 'ecr', 'ecr_current', 'last_reward_time', 'dec'];
+const fields = [{
+  key: 'No',
+  label: '',
+  _style: { width: '1%' },
+  sorter: true,
+  filter: false
+},
+  'name', 'rating', 'collection_power', 'ecr', 'ecr_current', 'last_reward_time',
+{
+  key: 'questClaimTrxID',
+  label: 'Quest',
+  sorter: false,
+  filter: false
+}, 'dec'
+  // ,{
+  //   key: 'show_details',
+  //   label: '',
+  //   _style: { width: '1%' },
+  //   sorter: false,
+  //   filter: false
+  // }
+];
 
 const getBadge = status => {
   switch (status) {
@@ -39,11 +54,13 @@ const getBadge = status => {
   }
 }
 
-export default class Dashboard extends React.Component {
+
+
+class Dashboard extends React.Component {
   constructor(props) {
     super(props);
 
-    this.state = { accounts: [] };
+    this.state = { accounts: [], details: [], info: false, transactionInfo: {} };
   }
 
   async componentDidMount() {
@@ -56,9 +73,10 @@ export default class Dashboard extends React.Component {
     const [...accounts] = envAccounts.split(',');
 
     accounts.sort(function (a, b) { return a - b }).forEach(async (account, i) => {
-      let [detailResponse, balanceResponse] = await Promise.all([
+      let [detailResponse, balanceResponse, questResponse] = await Promise.all([
         axios.get(`https://api.splinterlands.io/players/details?name=${account}`),
-        axios.get(`https://api.splinterlands.io/players/balances?username=${account}`)
+        axios.get(`https://api.splinterlands.io/players/balances?username=${account}`),
+        axios.get(`https://api.splinterlands.io/players/quests?username=${account}`),
       ]);
 
       let indexDEC = 0;
@@ -74,20 +92,54 @@ export default class Dashboard extends React.Component {
           continue;
         }
       }
+
+      let ecr_cal = ((detailResponse.data.capture_rate / 100) + ((new Date() - new Date(balanceResponse.data[indexECR].last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2);
       let data = {
         ...detailResponse.data,
         ...{
           dec: balanceResponse.data[indexDEC].balance,
           No: i + 1,
           ecr: balanceResponse.data[indexECR].balance,
-          ecr_current: ((detailResponse.data.capture_rate / 100) + ((new Date() - new Date(balanceResponse.data[indexECR].last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2),
+          ecr_current: ecr_cal > 100 ? 100 : ecr_cal,
           last_reward_time: balanceResponse.data[indexECR].last_reward_time
+        },
+        ...{
+          questName: questResponse.data[0].name,
+          questTotalItem: questResponse.data[0].total_items,
+          questCompleted: questResponse.data[0].completed_items,
+          questClaimTrxID: questResponse.data[0].claim_trx_id,
+          questClaimDate: questResponse.data[0].claim_date,
+          questRewards: questResponse.data[0].rewards,
         }
       };
       await this.setState({
         accounts: [...this.state.accounts, data]
       });
     });
+  }
+
+  setInfo(value) {
+    this.setState({ info: value });
+  }
+
+  async getTransaction(trxid) {
+    let [trxResponse] = await Promise.all([
+      axios.get(`https://api.splinterlands.io/transactions/lookup?trx_id=${trxid}`),
+    ]);
+    this.setState({ transactionInfo: JSON.parse(trxResponse.data.trx_info.result).rewards });
+    console.log(trxResponse.data.trx_info);
+  }
+
+  toggleDetails(index) {
+    const position = this.state.details.indexOf(index);
+    let newDetails = this.state.details.slice();
+    if (position !== -1) {
+      newDetails.splice(position, 1);
+    } else {
+      newDetails = [...this.state.details, index];
+    }
+
+    this.setState({ details: newDetails });
   }
 
   timeSince(date) {
@@ -125,7 +177,7 @@ export default class Dashboard extends React.Component {
             <CWidgetDropdown
               color="gradient-primary"
               header={this.state.accounts.length.toString()}
-              text="Total Accounts"
+              text="Accounts"
               footerSlot={
                 <ChartLineSimple
                   pointed
@@ -144,8 +196,8 @@ export default class Dashboard extends React.Component {
           <CCol sm="6" lg="3">
             <CWidgetDropdown
               color="gradient-info"
-              header={this.state.accounts.filter(item => item.collection_power < process.env.REACT_APP_CP_ALERT).length}
-              text={'Accounts CP < ' + process.env.REACT_APP_CP_ALERT + ' CP'}
+              header={this.state.accounts.filter(item => item.collection_power < process.env.REACT_APP_CP_ALERT).length.toString()}
+              text={'Collection Power < ' + process.env.REACT_APP_CP_ALERT + ' CP'}
               footerSlot={
                 <ChartLineSimple
                   pointed
@@ -165,7 +217,7 @@ export default class Dashboard extends React.Component {
           <CCol sm="6" lg="3">
             <CWidgetDropdown
               color="gradient-warning"
-              header={this.state.accounts.filter(item => ((item.capture_rate / 100) + ((new Date() - new Date(item.last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2) >= 90).length}
+              header={this.state.accounts.filter(item => ((item.capture_rate / 100) + ((new Date() - new Date(item.last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2) >= 90).length.toString()}
               text={'Enery Capture Rate >= ' + process.env.REACT_APP_ERC_HIGH + '% '}
               footerSlot={
                 <ChartLineSimple
@@ -187,7 +239,7 @@ export default class Dashboard extends React.Component {
             <CWidgetDropdown
               color="gradient-danger"
               header={this.state.accounts.reduce((a, b) => +a + +b.dec, 0).toString()}
-              text="Total DEC"
+              text="Dark Energy Crystals"
               footerSlot={
                 <ChartLineSimple
                   className="mt-3"
@@ -209,13 +261,13 @@ export default class Dashboard extends React.Component {
           <CCol xs="12" lg="12">
             <CCard>
               <CCardHeader>
-                Accounts Datatable
+                Splinterlands Accounts
               </CCardHeader>
               <CCardBody>
                 <CDataTable
                   items={this.state.accounts}
                   fields={fields}
-                  striped
+                  itemsPerPageSelect
                   itemsPerPage={10}
                   pagination
                   columnFilter
@@ -227,6 +279,18 @@ export default class Dashboard extends React.Component {
                       (item) => (
                         <td>
                           <strong>{item.name}</strong>
+                        </td>
+                      ),
+                    'questClaimTrxID':
+                      (item) => (
+                        <td>
+                          {/* <strong>{item.questClaimTrxID == undefined ? item.questCompleted + '/' + item.questTotalItem : 'Completed (' + this.timeSince(new Date(item.questClaimDate)) + ')'}</strong> */}
+                          {
+                            item.questClaimTrxID == undefined
+                              ? <div className="text-value text-danger">{item.questCompleted + '/' + item.questTotalItem}</div>
+                              : <CButton color="success" onClick={() => { this.getTransaction(item.questClaimTrxID); this.setInfo(!this.state.info) }} className="mr-1">Completed</CButton>
+                          }
+
                         </td>
                       ),
                     'status':
@@ -268,8 +332,53 @@ export default class Dashboard extends React.Component {
                           <p>{this.timeSince(new Date(item.last_reward_time))}</p>
                         </td>
                       ),
+                    // 'show_details':
+                    //   (item, index) => {
+                    //     return (
+                    //       <td className="py-2">
+                    //         <CButton
+                    //           color="primary"
+                    //           onClick={() => { this.toggleDetails(index) }}
+                    //         >
+                    //           {this.state.details.includes(index) ? 'Hide' : 'Show'}
+                    //         </CButton>
+                    //       </td>
+                    //     )
+                    //   },
+                    // 'details':
+                    //   (item, index) => {
+                    //     return (
+                    //       <CCollapse show={this.state.details.includes(index)}>
+                    //         <CCardBody>
+                    //           <h4>
+                    //             {item.username}
+                    //           </h4>
+                    //           <p className="text-muted">User since: </p>
+                    //           <CButton size="sm" color="info">
+                    //             User Settings
+                    //           </CButton>
+                    //         </CCardBody>
+                    //       </CCollapse>
+                    //     )
+                    //   }
                   }}
                 />
+
+                <CModal
+                  show={this.state.info}
+                  onClose={() => this.setInfo(!this.state.info)}
+                  size="lg"
+                >
+                  <CModalHeader closeButton>
+                    <CModalTitle>Reward information</CModalTitle>
+                  </CModalHeader>
+                  <CModalBody>
+                    {JSON.stringify(this.state.transactionInfo)}
+                  </CModalBody>
+                  <CModalFooter>
+                    <CButton color="primary" onClick={() => this.setInfo(!this.state.info)}>Close</CButton>
+                  </CModalFooter>
+                </CModal>
               </CCardBody>
             </CCard>
           </CCol>
@@ -279,6 +388,29 @@ export default class Dashboard extends React.Component {
   }
 }
 
-// const Dashboard = () => {
+// const mapDispatchToProps = (dispatch, ownProps) => {
+//   return {
+//     getCandidates: () => {
+//       dispatch(getUsers());
+//     },
+//     getRecruiter: () => {
+//       dispatch(getUsers());
+//     },
+//     getMatch: () => {
+//       dispatch(getUsers());
+//     }
+//   };
+// };
 
-// }
+// const mapStateToProps = state => {
+//   return {
+//     user: state.dashboard.dashboard
+//   };
+// };
+
+// const DashboardContainer = withRouter(
+//   connect(mapStateToProps, mapDispatchToProps)(Dashboard)
+// );
+
+export default Dashboard;
+// export default DashboardContainer;
