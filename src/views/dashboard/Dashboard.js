@@ -4,7 +4,6 @@ import {
   CButton,
   CCard,
   CCardBody,
-  CCollapse,
   CCardHeader,
   CCol,
   CRow,
@@ -14,12 +13,18 @@ import {
   CModalFooter,
   CModalHeader,
   CModalTitle,
-} from '@coreui/react'
-import {
-  CWidgetDropdown,
-} from '@coreui/react'
-import ChartLineSimple from '../charts/ChartLineSimple'
+  CWidgetProgressIcon,
+  CFormGroup,
+  CInputGroup,
+  CInput,
+  CInputGroupAppend
+} from '@coreui/react';
+import CIcon from '@coreui/icons-react'
 
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+import { freeSet } from '@coreui/icons'
 const axios = require('axios');
 const fields = [{
   key: 'No',
@@ -28,11 +33,29 @@ const fields = [{
   sorter: true,
   filter: false
 },
-  'name', 'rating', 'collection_power', 'ecr', 'ecr_current', 'last_reward_time',
+  'name', 'rating', 'collection_power',
+{
+  key: 'ecr',
+  label: 'Last time rate',
+  sorter: true,
+  filter: false
+},
+{
+  key: 'ecr_current',
+  label: 'Current rate',
+  sorter: true,
+  filter: false
+},
+{
+  key: 'last_reward_time',
+  label: 'Last time played',
+  sorter: true,
+  filter: false
+},
 {
   key: 'questClaimTrxID',
   label: 'Quest',
-  sorter: false,
+  sorter: true,
   filter: false
 }, 'dec'
   // ,{
@@ -42,6 +65,13 @@ const fields = [{
   //   sorter: false,
   //   filter: false
   // }
+  , {
+  key: 'refresh',
+  label: '',
+  _style: { width: '1%' },
+  sorter: false,
+  filter: false
+}
 ];
 
 const getBadge = status => {
@@ -54,80 +84,257 @@ const getBadge = status => {
   }
 }
 
-
-
 class Dashboard extends React.Component {
   constructor(props) {
     super(props);
 
-    this.state = { accounts: [], details: [], info: false, transactionInfo: {} };
+    this.state = { accounts: [], details: [], info: false, transactionInfo: {}, disabled: false, cardDetails: [] };
+    this.reloadAccount = this.reloadAccount.bind(this);
   }
 
-  async componentDidMount() {
+  //  componentDidMount
+  async componentWillMount() {
     var envAccounts = process.env.REACT_APP_ACCOUNTS;
 
     if (envAccounts == undefined || envAccounts.length == 0) {
-      console.log("Please set to 'USERNAME' .env...");
+      toast("Please set to 'REACT_APP_ACCOUNTS' in file .env...");
       return;
     }
+
+    if (this.state.cardDetails.length === 0) {
+      this.getCardDetails();
+    }
+
     const [...accounts] = envAccounts.split(',');
 
     accounts.sort(function (a, b) { return a - b }).forEach(async (account, i) => {
+
+
       let [detailResponse, balanceResponse, questResponse] = await Promise.all([
         axios.get(`https://api.splinterlands.io/players/details?name=${account}`),
         axios.get(`https://api.splinterlands.io/players/balances?username=${account}`),
         axios.get(`https://api.splinterlands.io/players/quests?username=${account}`),
       ]);
 
-      let indexDEC = 0;
-      let indexECR = 0;
-      for (let index = 0; index < balanceResponse.data.length; index++) {
-        const element = balanceResponse.data[index];
-        if (element.token == "DEC") {
-          indexDEC = index;
-          continue;
-        }
-        if (element.token == "ECR") {
-          indexECR = index;
-          continue;
-        }
+      if (detailResponse.data.error != undefined && detailResponse.data.error.includes("not found.")) {
+        toast(detailResponse.data.error);
+        return null;
       }
 
+      let indexDEC = balanceResponse.data.findIndex(x => x.token === "DEC");
+      let indexECR = balanceResponse.data.findIndex(x => x.token === "ECR");
       let ecr_cal = ((detailResponse.data.capture_rate / 100) + ((new Date() - new Date(balanceResponse.data[indexECR].last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2);
+
+      let trsactionResponse;
+      if (questResponse.data.length != 0 && questResponse.data[0].claim_trx_id != null) {
+        trsactionResponse = await axios.get(`https://api.splinterlands.io/transactions/lookup?trx_id=${questResponse.data[0].claim_trx_id}`);
+      }
+
       let data = {
         ...detailResponse.data,
         ...{
-          dec: balanceResponse.data[indexDEC].balance,
+          dec: balanceResponse.data[indexDEC] == null ? 0 : balanceResponse.data[indexDEC].balance,
           No: i + 1,
-          ecr: balanceResponse.data[indexECR].balance,
+          ecr: balanceResponse.data[indexDEC] == null ? 0 : balanceResponse.data[indexECR].balance,
           ecr_current: ecr_cal > 100 ? 100 : ecr_cal,
-          last_reward_time: balanceResponse.data[indexECR].last_reward_time
+          last_reward_time: balanceResponse.data[indexDEC] == null ? 0 : balanceResponse.data[indexECR].last_reward_time
         },
         ...{
-          questName: questResponse.data[0].name,
-          questTotalItem: questResponse.data[0].total_items,
-          questCompleted: questResponse.data[0].completed_items,
-          questClaimTrxID: questResponse.data[0].claim_trx_id,
-          questClaimDate: questResponse.data[0].claim_date,
-          questRewards: questResponse.data[0].rewards,
+          questName: questResponse.data.length != 0 ? questResponse.data[0].name : '',
+          questTotalItem: questResponse.data.length != 0 ? questResponse.data[0].total_items : 0,
+          questCompleted: questResponse.data.length != 0 ? questResponse.data[0].completed_items : 0,
+          questClaimTrxID: questResponse.data.length != 0 ? questResponse.data[0].claim_trx_id : null,
+          questClaimDate: questResponse.data.length != 0 ? questResponse.data[0].claim_date : null,
+          questRewards: questResponse.data.length != 0 ? questResponse.data[0].rewards : null,
+        },
+        ...{
+          transactionInfo: trsactionResponse != undefined ? JSON.parse(trsactionResponse.data.trx_info.result).rewards : null
         }
       };
+
       await this.setState({
         accounts: [...this.state.accounts, data]
       });
     });
+
+    setInterval(() => {
+      accounts.forEach((account, index) => {
+        this.reloadAccount(account);
+      })
+    }, 30000);
   }
 
   setInfo(value) {
     this.setState({ info: value });
   }
 
-  async getTransaction(trxid) {
-    let [trxResponse] = await Promise.all([
-      axios.get(`https://api.splinterlands.io/transactions/lookup?trx_id=${trxid}`),
+  // async getTransaction(trxid) {
+  //   this.setInfo(!this.state.info);
+  //   let [trxResponse] = await Promise.all([
+  //     axios.get(`https://api.splinterlands.io/transactions/lookup?trx_id=${trxid}`)
+  //   ]);
+  //   await this.setState({ transactionInfo: JSON.parse(trxResponse.data.trx_info.result).rewards });
+  // }
+
+  rewardDetail(result) {
+    if (result == '{}') {
+      return;
+    }
+
+    let arr = JSON.parse(result);
+    if (arr.length == 0) {
+      return;
+    }
+
+    let render = arr.map((item, i) => {
+
+
+      let str = "";
+      switch (item.type) {
+        case "credits":
+          str = <CCol sm="6" md="4" lg="3" className="mb-4 text-center" key={i}>
+            <div>
+              <img src={window.location.origin + `/assets/credits.png`} alt="credits" style={{ width: '135px' }} />
+            </div>
+            <div className="mt-2">
+              <strong>{item.quantity + " CREDIT(S)"}</strong>
+            </div>
+          </CCol>
+          break;
+        case "potion":
+          let image;
+          let subImg;
+
+          if (item.potion_type == "legendary") {
+            image = <img style={{ width: '135px' }} src={window.location.origin + `/assets/potion_legendary.png`} alt="legendary" />
+            subImg = item.quantity + " Legendary Potion";
+          }
+          else {
+            image = <img style={{ width: '135px' }} src={window.location.origin + `/assets/potion_gold.png`} alt="gold" />
+            subImg = item.quantity + " Alchemy Potion";
+          }
+
+          str = <CCol sm="6" md="4" lg="3" className="mb-4 text-center" key={i}>
+            <div className="mt-5">
+              {image}
+            </div>
+            <div className="mt-2">
+              <strong>{subImg}</strong>
+            </div>
+          </CCol>
+          break;
+        case "reward_card":
+          let cardImage;
+          var card = this.state.cardDetails.filter(card => card.id == item.card.card_detail_id);
+          cardImage = <img style={{ width: 200, height: 279 }} src={window.location.origin + `/assets/monster-sumoner-abi/${card[0].name.replace(" ", "-")}.png`} alt={card.name} />
+
+          str = <CCol sm="6" md="4" lg="3" key={i} className="mb-4">
+            <div className="position-relative card-image">
+              {cardImage}
+              {/* <div className="card-mana"><img src={window.location.origin + `/assets/monster-sumoner-abi/stat-mana.png`} className="icona" /><span>2</span></div> */}
+              <div className="card-name">{card[0].name}</div>
+            </div>
+          </CCol>
+          break;
+      }
+
+      return (
+        str
+      )
+    })
+
+    return render;
+  }
+
+  async getCardByUID(uid) {
+    return await axios.get(`https://api.splinterlands.io/cards/find?ids=${uid}`)
+      .then(response => {
+        return response.data[0].details;
+      })
+      .catch(function (error) { console.log(error) });
+  }
+
+  getCardDetails() {
+    axios.get(`https://api.splinterlands.io/cards/get_details`)
+      .then(response => {
+        this.setState({ cardDetails: response.data });
+      })
+      .catch(function (error) { console.log(error) });
+  }
+
+  renderType(type) {
+    switch (type) {
+      case 'credits':
+
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  async reloadAccount(accountName) {
+    this.setState({ disabled: true });
+
+    let [detailResponse, balanceResponse, questResponse] = await Promise.all([
+      axios.get(`https://api.splinterlands.io/players/details?name=${accountName}`),
+      axios.get(`https://api.splinterlands.io/players/balances?username=${accountName}`),
+      axios.get(`https://api.splinterlands.io/players/quests?username=${accountName}`),
     ]);
-    this.setState({ transactionInfo: JSON.parse(trxResponse.data.trx_info.result).rewards });
-    console.log(trxResponse.data.trx_info);
+
+    let indexDEC = balanceResponse.data.findIndex(x => x.token === "DEC");
+    let indexECR = balanceResponse.data.findIndex(x => x.token === "ECR");
+
+    let trsactionResponse;
+    if (questResponse.data.length != 0 && questResponse.data[0].claim_trx_id != null) {
+      trsactionResponse = await axios.get(`https://api.splinterlands.io/transactions/lookup?trx_id=${questResponse.data[0].claim_trx_id}`);
+    }
+
+    let ecr_cal = ((detailResponse.data.capture_rate / 100) + ((new Date() - new Date(balanceResponse.data[indexECR].last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2);
+    let data = {
+      ...detailResponse.data,
+      ...{
+        dec: balanceResponse.data[indexDEC].balance,
+        // No: i + 1,
+        ecr: balanceResponse.data[indexECR].balance,
+        ecr_current: ecr_cal > 100 ? 100 : ecr_cal,
+        last_reward_time: balanceResponse.data[indexECR].last_reward_time
+      },
+      ...{
+
+        questName: questResponse.data.length != 0 ? questResponse.data[0].name : null,
+        questTotalItem: questResponse.data.length != 0 ? questResponse.data[0].total_items : null,
+        questCompleted: questResponse.data.length != 0 ? questResponse.data[0].completed_items : null,
+        questClaimTrxID: questResponse.data.length != 0 ? questResponse.data[0].claim_trx_id : null,
+        questClaimDate: questResponse.data.length != 0 ? questResponse.data[0].claim_date : null,
+        questRewards: questResponse.data.length != 0 ? questResponse.data[0].rewards : null,
+      },
+      ...{
+        transactionInfo: trsactionResponse != undefined ? JSON.parse(trsactionResponse.data.trx_info.result).rewards : null
+      }
+    };
+
+    var cloneAccounts = this.state.accounts;
+    for (let index = 0; index < cloneAccounts.length; index++) {
+      const element = cloneAccounts[index];
+      if (element.name === accountName) {
+        cloneAccounts[index].dec = data.dec;
+        cloneAccounts[index].collection_power = data.collection_power;
+        cloneAccounts[index].ecr = data.ecr;
+        cloneAccounts[index].ecr_cal = data.ecr_cal;
+        cloneAccounts[index].last_reward_time = data.last_reward_time;
+        cloneAccounts[index].ecr_current = data.ecr_current;
+        cloneAccounts[index].questName = data.questName;
+        cloneAccounts[index].questTotalItem = data.questTotalItem;
+        cloneAccounts[index].questCompleted = data.questCompleted;
+        cloneAccounts[index].questClaimTrxID = data.questClaimTrxID;
+        cloneAccounts[index].questClaimDate = data.questClaimDate;
+        cloneAccounts[index].questRewards = data.questRewards;
+        cloneAccounts[index].rating = data.rating;
+      }
+    }
+
+    this.setState({ disabled: false, accounts: cloneAccounts });
   }
 
   toggleDetails(index) {
@@ -171,97 +378,87 @@ class Dashboard extends React.Component {
   render() {
     return (
       <>
-        {/* <WidgetsDropdown /> */}
         <CRow>
-          <CCol sm="6" lg="3">
-            <CWidgetDropdown
-              color="gradient-primary"
+          <CCol sm="6" md="2">
+            <CWidgetProgressIcon
               header={this.state.accounts.length.toString()}
               text="Accounts"
-              footerSlot={
-                <ChartLineSimple
-                  pointed
-                  className="c-chart-wrapper mt-3 mx-3"
-                  style={{ height: '70px' }}
-                  dataPoints={[65, 59, 84, 84, 51, 55, 40]}
-                  pointHoverBackgroundColor="primary"
-                  label="Members"
-                  labels="months"
-                />
-              }
-            >
-            </CWidgetDropdown>
-          </CCol>
-
-          <CCol sm="6" lg="3">
-            <CWidgetDropdown
               color="gradient-info"
+              inverse
+            >
+              <CIcon name="cil-people" height="36" />
+            </CWidgetProgressIcon>
+          </CCol>
+          <CCol sm="6" md="2">
+            <CWidgetProgressIcon
               header={this.state.accounts.filter(item => item.collection_power < process.env.REACT_APP_CP_ALERT).length.toString()}
               text={'Collection Power < ' + process.env.REACT_APP_CP_ALERT + ' CP'}
-              footerSlot={
-                <ChartLineSimple
-                  pointed
-                  className="mt-3 mx-3"
-                  style={{ height: '70px' }}
-                  dataPoints={[1, 18, 9, 17, 34, 22, 11]}
-                  pointHoverBackgroundColor="info"
-                  options={{ elements: { line: { tension: 0.00001 } } }}
-                  label="Members"
-                  labels="months"
-                />
-              }
+              color="gradient-success"
+              inverse
             >
-            </CWidgetDropdown>
+              <CIcon name="cil-userFollow" height="36" />
+            </CWidgetProgressIcon>
           </CCol>
-
-          <CCol sm="6" lg="3">
-            <CWidgetDropdown
-              color="gradient-warning"
+          <CCol sm="6" md="2">
+            <CWidgetProgressIcon
               header={this.state.accounts.filter(item => ((item.capture_rate / 100) + ((new Date() - new Date(item.last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2) >= 90).length.toString()}
               text={'Enery Capture Rate >= ' + process.env.REACT_APP_ERC_HIGH + '% '}
-              footerSlot={
-                <ChartLineSimple
-                  className="mt-3"
-                  style={{ height: '70px' }}
-                  backgroundColor="rgba(255,255,255,.2)"
-                  dataPoints={[78, 81, 80, 45, 34, 12, 40]}
-                  options={{ elements: { line: { borderWidth: 2.5 } } }}
-                  pointHoverBackgroundColor="warning"
-                  label="Members"
-                  labels="months"
-                />
-              }
+              color="gradient-warning"
+              inverse
             >
-            </CWidgetDropdown>
+              <CIcon name="cil-basket" height="36" />
+            </CWidgetProgressIcon>
           </CCol>
-
-          <CCol sm="6" lg="3">
-            <CWidgetDropdown
-              color="gradient-danger"
-              header={this.state.accounts.reduce((a, b) => +a + +b.dec, 0).toString()}
+          <CCol sm="6" md="2">
+            <CWidgetProgressIcon
+              header={this.state.accounts.reduce((a, b) => +a + +b.dec, 0).toFixed(2).toString()}
               text="Dark Energy Crystals"
-              footerSlot={
-                <ChartLineSimple
-                  className="mt-3"
-                  style={{ height: '70px' }}
-                  backgroundColor="rgba(255,255,255,.2)"
-                  dataPoints={[78, 81, 80, 45, 34, 12, 40]}
-                  options={{ elements: { line: { borderWidth: 2.5 } } }}
-                  pointHoverBackgroundColor="danger"
-                  label="Members"
-                  labels="months"
-                />
-              }
+              color="gradient-primary"
+              inverse
             >
-            </CWidgetDropdown>
+              <CIcon name="cil-chartPie" height="36" />
+            </CWidgetProgressIcon>
+          </CCol>
+          <CCol sm="6" md="2">
+            <CWidgetProgressIcon
+              header={this.state.accounts.sort((a, b) => b.dec - a.dec)[0] != undefined ? this.state.accounts.sort((a, b) => b.dec - a.dec)[0].name : 'Player'}
+              text="Highest"
+              color="gradient-danger"
+              inverse
+            >
+              <CIcon name="cil-speedometer" height="36" />
+            </CWidgetProgressIcon>
+          </CCol>
+          <CCol sm="6" md="2">
+            <CWidgetProgressIcon
+              header="Comming"
+              text="to soon"
+              color="gradient-info"
+              inverse
+            >
+              <CIcon name="cil-speech" height="36" />
+            </CWidgetProgressIcon>
           </CCol>
         </CRow>
-
+        <ToastContainer />
         <CRow>
           <CCol xs="12" lg="12">
             <CCard>
               <CCardHeader>
-                Splinterlands Accounts
+                <strong>Splinterlands Accounts ({this.state.accounts.length})</strong>
+                <div className="card-header-actions">
+                  <CFormGroup row style={{ marginBottom: '0' }}>
+                    <CCol md="12">
+                      <CInputGroup>
+                        <CInput id="input2-group2" name="input2-group2" placeholder="Coming to soon" />
+                        <CInputGroupAppend>
+                          <CButton type="button" color="primary">Add</CButton>
+                        </CInputGroupAppend>
+                      </CInputGroup>
+                    </CCol>
+                  </CFormGroup>
+                </div>
+
               </CCardHeader>
               <CCardBody>
                 <CDataTable
@@ -279,18 +476,17 @@ class Dashboard extends React.Component {
                       (item) => (
                         <td>
                           <strong>{item.name}</strong>
+                          <CIcon content={freeSet.cilCopy} className="ml-2" onClick={() => { navigator.clipboard.writeText(item.name); toast("Copied") }} style={{ cursor: 'pointer' }} />
                         </td>
                       ),
                     'questClaimTrxID':
                       (item) => (
                         <td>
-                          {/* <strong>{item.questClaimTrxID == undefined ? item.questCompleted + '/' + item.questTotalItem : 'Completed (' + this.timeSince(new Date(item.questClaimDate)) + ')'}</strong> */}
                           {
                             item.questClaimTrxID == undefined
                               ? <div className="text-value text-danger">{item.questCompleted + '/' + item.questTotalItem}</div>
-                              : <CButton color="success" onClick={() => { this.getTransaction(item.questClaimTrxID); this.setInfo(!this.state.info) }} className="mr-1">Completed</CButton>
+                              : <CButton color="success" onClick={() => { this.setInfo(!this.state.info); this.setState({ transactionInfo: item.transactionInfo }) }} className="mr-1">Rewards</CButton>
                           }
-
                         </td>
                       ),
                     'status':
@@ -303,64 +499,54 @@ class Dashboard extends React.Component {
                       ),
                     'collection_power':
                       (item) => (
-                        <td>
+                        <td className="text-right">
                           {item.collection_power < process.env.REACT_APP_CP_ALERT ? <div className="text-value text-danger">{item.collection_power}</div> : <div className="text-value text-success">{item.collection_power}</div>}
+                        </td>
+                      ),
+                    'rating':
+                      (item) => (
+                        <td className="text-right">
+                          <strong>{item.rating}</strong>
                         </td>
                       ),
                     'ecr':
                       (item) => (
-                        <td>
+                        <td className="text-right">
                           {item.capture_rate < process.env.REACT_APP_ERC_ALERT * 100 ? <div className="text-value text-danger">{item.capture_rate / 100}%</div> : <div className="text-value text-success">{item.capture_rate / 100}%</div>}
                         </td>
                       ),
                     'ecr_current':
                       (item) => (
-                        <td>
-                          {/* <div className="text-value text-success">{((item.capture_rate / 100) + ((new Date() - new Date(item.last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2)}%</div> */}
+                        <td className="text-right"> 
                           <div className="text-value text-success">{item.ecr_current}%</div>
                         </td>
                       ),
                     'dec':
                       (item) => (
-                        <td>
+                        <td className="text-right">
                           <div className="text-value text-success">{item.dec}</div>
                         </td>
                       ),
                     'last_reward_time':
                       (item) => (
-                        <td>
+                        <td className="text-center">
                           <p>{this.timeSince(new Date(item.last_reward_time))}</p>
                         </td>
                       ),
-                    // 'show_details':
-                    //   (item, index) => {
-                    //     return (
-                    //       <td className="py-2">
-                    //         <CButton
-                    //           color="primary"
-                    //           onClick={() => { this.toggleDetails(index) }}
-                    //         >
-                    //           {this.state.details.includes(index) ? 'Hide' : 'Show'}
-                    //         </CButton>
-                    //       </td>
-                    //     )
-                    //   },
-                    // 'details':
-                    //   (item, index) => {
-                    //     return (
-                    //       <CCollapse show={this.state.details.includes(index)}>
-                    //         <CCardBody>
-                    //           <h4>
-                    //             {item.username}
-                    //           </h4>
-                    //           <p className="text-muted">User since: </p>
-                    //           <CButton size="sm" color="info">
-                    //             User Settings
-                    //           </CButton>
-                    //         </CCardBody>
-                    //       </CCollapse>
-                    //     )
-                    //   }
+                    'refresh':
+                      (item) => {
+                        return (
+                          <td className="py-2">
+                            <CButton block
+                              disabled={this.state.disabled}
+                              color={this.state.disabled ? "secondary" : "primary"}
+                              onClick={() => { this.reloadAccount(item.name) }}
+                            >
+                              {this.state.disabled ? "Refresh" : "Refresh"}
+                            </CButton>
+                          </td>
+                        )
+                      }
                   }}
                 />
 
@@ -368,12 +554,15 @@ class Dashboard extends React.Component {
                   show={this.state.info}
                   onClose={() => this.setInfo(!this.state.info)}
                   size="lg"
+                // closeOnBackdrop={false}
                 >
                   <CModalHeader closeButton>
                     <CModalTitle>Reward information</CModalTitle>
                   </CModalHeader>
                   <CModalBody>
-                    {JSON.stringify(this.state.transactionInfo)}
+                    <CRow className="justify-content-md-center" key={this.state.transactionInfo} xs={{ gutterY: 5 }} md={{ gutterY: 5 }}>
+                      {this.rewardDetail(JSON.stringify(this.state.transactionInfo))}
+                    </CRow>
                   </CModalBody>
                   <CModalFooter>
                     <CButton color="primary" onClick={() => this.setInfo(!this.state.info)}>Close</CButton>

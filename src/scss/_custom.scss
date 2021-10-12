@@ -1,1 +1,47 @@
 // Here you can add other styles
+.card-image 
+{
+    width: 200px;
+    height: 279px;
+}
+.card-image .card-name {
+    position: absolute;
+    top: 201px;
+    left: 10px;
+    right: 10px;
+    font-size: 14px;
+    font-weight: bolder;
+    color: #ffffff;
+    text-shadow: 1px 1px 3px #000, -1px -1px 1px rgb(0 0 0 / 50%);
+    font-style: italic;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.card-image .card-mana {
+    position: absolute;
+    top: 10px;
+    left: 3px;
+    width: 46px;
+    height: 46px;
+}
+
+.card-image img.icona {
+    position: absolute;
+    top: -7px;
+    left: 0;
+    width: 100%;
+}
+
+.card-image span {
+    position: absolute;
+    top: -9px;
+    left: 14px;
+    width: 100%;
+    color: #fff;
+    font-weight: bolder;
+    font-size: 1.5rem;
+    text-shadow: -1px 0px 1px #000, 0px -1px 1px #000, 2px 2px 1px #000;
+    font-style: italic;
+    line-height: 46px !important;
+}
