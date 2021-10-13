@@ -23,8 +23,10 @@ import CIcon from '@coreui/icons-react'
 
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { freeSet } from '@coreui/icons';
 
-import { freeSet } from '@coreui/icons'
+var jsonData = require('../../json/accountData.json');
+
 const axios = require('axios');
 const fields = [{
   key: 'No',
@@ -33,7 +35,21 @@ const fields = [{
   sorter: true,
   filter: false
 },
-  'name', 'rating', 'collection_power',
+  'name'
+  , {
+  key: 'rating',
+  label: 'Rating',
+  _style: { width: '7%' },
+  sorter: true,
+  filter: false
+},
+{
+  key: 'collection_power',
+  label: 'Power',
+  _style: { width: '7%' },
+  sorter: true,
+  filter: false
+},
 {
   key: 'ecr',
   label: 'Last time rate',
@@ -53,19 +69,26 @@ const fields = [{
   filter: false
 },
 {
+  key: 'dec',
+  label: 'Dec',
+  sorter: true,
+  filter: false
+},
+{
   key: 'questClaimTrxID',
   label: 'Quest',
   sorter: true,
   filter: false
-}, 'dec'
-  // ,{
-  //   key: 'show_details',
-  //   label: '',
-  //   _style: { width: '1%' },
-  //   sorter: false,
-  //   filter: false
-  // }
-  , {
+},
+{
+  key: 'cards',
+  label: 'Collection',
+  _style: { width: '1%' },
+  sorter: true,
+  filter: false
+},
+
+{
   key: 'refresh',
   label: '',
   _style: { width: '1%' },
@@ -74,50 +97,34 @@ const fields = [{
 }
 ];
 
-const getBadge = status => {
-  switch (status) {
-    case 'Active': return 'success'
-    case 'Inactive': return 'secondary'
-    case 'Pending': return 'warning'
-    case 'Banned': return 'danger'
-    default: return 'primary'
-  }
-}
-
 class Dashboard extends React.Component {
   constructor(props) {
     super(props);
 
-    this.state = { accounts: [], details: [], info: false, transactionInfo: {}, disabled: false, cardDetails: [] };
+    this.state = { accounts: [], details: [], info: false, transactionInfo: {}, questClaimTrxID: "", disabled: false, cardDetails: [] };
     this.reloadAccount = this.reloadAccount.bind(this);
   }
 
   //  componentDidMount
-  async componentWillMount() {
-    var envAccounts = process.env.REACT_APP_ACCOUNTS;
-
-    if (envAccounts == undefined || envAccounts.length == 0) {
-      toast("Please set to 'REACT_APP_ACCOUNTS' in file .env...");
-      return;
-    }
+  async componentDidMount() {
+    var secondUpdate = process.env.REACT_APP_AUTO_UPDATE || 30;
+    var timeUpdate = secondUpdate * 1000;
+    var accounts = jsonData;
 
     if (this.state.cardDetails.length === 0) {
       this.getCardDetails();
     }
 
-    const [...accounts] = envAccounts.split(',');
-
     accounts.sort(function (a, b) { return a - b }).forEach(async (account, i) => {
-
-
-      let [detailResponse, balanceResponse, questResponse] = await Promise.all([
-        axios.get(`https://api.splinterlands.io/players/details?name=${account}`),
-        axios.get(`https://api.splinterlands.io/players/balances?username=${account}`),
-        axios.get(`https://api.splinterlands.io/players/quests?username=${account}`),
+      let [detailResponse, balanceResponse, questResponse, collectionResponse] = await Promise.all([
+        axios.get(`https://api.splinterlands.io/players/details?name=${account.AccountName}`),
+        axios.get(`https://api.splinterlands.io/players/balances?username=${account.AccountName}`),
+        axios.get(`https://api.splinterlands.io/players/quests?username=${account.AccountName}`),
+        axios.get(`https://api.splinterlands.io/cards/collection/${account.AccountName}`),
       ]);
 
       if (detailResponse.data.error != undefined && detailResponse.data.error.includes("not found.")) {
-        toast(detailResponse.data.error);
+        toast.info(detailResponse.data.error);
         return null;
       }
 
@@ -135,9 +142,9 @@ class Dashboard extends React.Component {
         ...{
           dec: balanceResponse.data[indexDEC] == null ? 0 : balanceResponse.data[indexDEC].balance,
           No: i + 1,
-          ecr: balanceResponse.data[indexDEC] == null ? 0 : balanceResponse.data[indexECR].balance,
+          ecr: balanceResponse.data[indexECR] == null ? 0 : balanceResponse.data[indexECR].balance,
           ecr_current: ecr_cal > 100 ? 100 : ecr_cal,
-          last_reward_time: balanceResponse.data[indexDEC] == null ? 0 : balanceResponse.data[indexECR].last_reward_time
+          last_reward_time: balanceResponse.data[indexECR] == null ? 0 : balanceResponse.data[indexECR].last_reward_time
         },
         ...{
           questName: questResponse.data.length != 0 ? questResponse.data[0].name : '',
@@ -148,7 +155,11 @@ class Dashboard extends React.Component {
           questRewards: questResponse.data.length != 0 ? questResponse.data[0].rewards : null,
         },
         ...{
-          transactionInfo: trsactionResponse != undefined ? JSON.parse(trsactionResponse.data.trx_info.result).rewards : null
+          transactionInfo: trsactionResponse != undefined ? JSON.parse(trsactionResponse.data.trx_info.result).rewards : null,
+          PostingKey: account.PostingKey
+        },
+        ...{
+          cards: collectionResponse != null & collectionResponse.card != undefined ? collectionResponse.card : []
         }
       };
 
@@ -159,9 +170,9 @@ class Dashboard extends React.Component {
 
     setInterval(() => {
       accounts.forEach((account, index) => {
-        this.reloadAccount(account);
+        this.reloadAccount(account.AccountName);
       })
-    }, 30000);
+    }, timeUpdate);
   }
 
   setInfo(value) {
@@ -178,17 +189,17 @@ class Dashboard extends React.Component {
 
   rewardDetail(result) {
     if (result == '{}') {
+      console.log("result " + result);
       return;
     }
 
     let arr = JSON.parse(result);
-    if (arr.length == 0) {
+    if (arr == null || arr.length == 0) {
+      console.log("arr " + arr);
       return;
     }
 
     let render = arr.map((item, i) => {
-
-
       let str = "";
       switch (item.type) {
         case "credits":
@@ -226,21 +237,19 @@ class Dashboard extends React.Component {
         case "reward_card":
           let cardImage;
           var card = this.state.cardDetails.filter(card => card.id == item.card.card_detail_id);
-          cardImage = <img style={{ width: 200, height: 279 }} src={window.location.origin + `/assets/monster-sumoner-abi/${card[0].name.replace(" ", "-")}.png`} alt={card.name} />
+          cardImage = <img style={{ width: 200, height: 279 }} src={window.location.origin + `/assets/monster-sumoner-abi/${card[0] != undefined ? card[0].name.replace(" ", "-") : ""}.png`} alt={card[0] != undefined ? card[0].name : ""} />
 
           str = <CCol sm="6" md="4" lg="3" key={i} className="mb-4">
             <div className="position-relative card-image">
               {cardImage}
               {/* <div className="card-mana"><img src={window.location.origin + `/assets/monster-sumoner-abi/stat-mana.png`} className="icona" /><span>2</span></div> */}
-              <div className="card-name">{card[0].name}</div>
+              <div className="card-name">{card[0] != undefined ? card[0].name : ""}</div>
             </div>
           </CCol>
           break;
       }
 
-      return (
-        str
-      )
+      return str;
     })
 
     return render;
@@ -290,21 +299,21 @@ class Dashboard extends React.Component {
       trsactionResponse = await axios.get(`https://api.splinterlands.io/transactions/lookup?trx_id=${questResponse.data[0].claim_trx_id}`);
     }
 
-    let ecr_cal = ((detailResponse.data.capture_rate / 100) + ((new Date() - new Date(balanceResponse.data[indexECR].last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2);
+    let ecr_cal = ((detailResponse.data.capture_rate / 100) + ((new Date() - new Date(balanceResponse.data[indexECR] == undefined ? 0 : balanceResponse.data[indexECR].last_reward_time)) / (1000 * 60 * 60) * 1.041)).toFixed(2);
     let data = {
       ...detailResponse.data,
       ...{
-        dec: balanceResponse.data[indexDEC].balance,
+        dec: balanceResponse.data[indexDEC] == null ? 0 : balanceResponse.data[indexDEC].balance,
         // No: i + 1,
-        ecr: balanceResponse.data[indexECR].balance,
+        ecr: balanceResponse.data[indexECR] == null ? 0 : balanceResponse.data[indexECR].balance,
         ecr_current: ecr_cal > 100 ? 100 : ecr_cal,
-        last_reward_time: balanceResponse.data[indexECR].last_reward_time
+        last_reward_time: balanceResponse.data[indexDEC] == null ? 0 : balanceResponse.data[indexECR].last_reward_time
       },
       ...{
 
         questName: questResponse.data.length != 0 ? questResponse.data[0].name : null,
-        questTotalItem: questResponse.data.length != 0 ? questResponse.data[0].total_items : null,
-        questCompleted: questResponse.data.length != 0 ? questResponse.data[0].completed_items : null,
+        questTotalItem: questResponse.data.length != 0 ? questResponse.data[0].total_items : 0,
+        questCompleted: questResponse.data.length != 0 ? questResponse.data[0].completed_items : 0,
         questClaimTrxID: questResponse.data.length != 0 ? questResponse.data[0].claim_trx_id : null,
         questClaimDate: questResponse.data.length != 0 ? questResponse.data[0].claim_date : null,
         questRewards: questResponse.data.length != 0 ? questResponse.data[0].rewards : null,
@@ -476,25 +485,17 @@ class Dashboard extends React.Component {
                       (item) => (
                         <td>
                           <strong>{item.name}</strong>
-                          <CIcon content={freeSet.cilCopy} className="ml-2" onClick={() => { navigator.clipboard.writeText(item.name); toast("Copied") }} style={{ cursor: 'pointer' }} />
+                          <CIcon content={freeSet.cilCopy} className="ml-2" onClick={() => { navigator.clipboard.writeText(item.PostingKey); toast.info("Copied") }} style={{ cursor: 'pointer' }} />
                         </td>
                       ),
                     'questClaimTrxID':
                       (item) => (
-                        <td>
+                        <td className="text-right">
                           {
                             item.questClaimTrxID == undefined
                               ? <div className="text-value text-danger">{item.questCompleted + '/' + item.questTotalItem}</div>
-                              : <CButton color="success" onClick={() => { this.setInfo(!this.state.info); this.setState({ transactionInfo: item.transactionInfo }) }} className="mr-1">Rewards</CButton>
+                              : <CButton color="success" onClick={() => { this.setInfo(!this.state.info); this.setState({ transactionInfo: item.transactionInfo, questClaimTrxID: item.questClaimTrxID }) }} className="mr-1">Rewards</CButton>
                           }
-                        </td>
-                      ),
-                    'status':
-                      (item) => (
-                        <td>
-                          <CBadge color={getBadge(item.status)}>
-                            {item.status}
-                          </CBadge>
                         </td>
                       ),
                     'collection_power':
@@ -517,7 +518,7 @@ class Dashboard extends React.Component {
                       ),
                     'ecr_current':
                       (item) => (
-                        <td className="text-right"> 
+                        <td className="text-right">
                           <div className="text-value text-success">{item.ecr_current}%</div>
                         </td>
                       ),
@@ -533,11 +534,25 @@ class Dashboard extends React.Component {
                           <p>{this.timeSince(new Date(item.last_reward_time))}</p>
                         </td>
                       ),
+                    'cards':
+                      (item) => {
+                        return (
+                          <td className="py-2 text-center">
+                            <CButton
+                              // color={this.state.disabled ? "secondary" : "primary"}
+                              // onClick={() => { this.reloadAccount(item.name) }}
+                              color="info"
+                            >
+                              Cards
+                            </CButton>
+                          </td>
+                        )
+                      },
                     'refresh':
                       (item) => {
                         return (
-                          <td className="py-2">
-                            <CButton block
+                          <td className="py-2 text-center">
+                            <CButton
                               disabled={this.state.disabled}
                               color={this.state.disabled ? "secondary" : "primary"}
                               onClick={() => { this.reloadAccount(item.name) }}
@@ -557,10 +572,11 @@ class Dashboard extends React.Component {
                 // closeOnBackdrop={false}
                 >
                   <CModalHeader closeButton>
-                    <CModalTitle>Reward information</CModalTitle>
+                    {/* https://api.splinterlands.io/transactions/lookup?trx_id= */}
+                    <CModalTitle>Reward information <a href={'https://api.splinterlands.io/transactions/lookup?trx_id=' + this.state.questClaimTrxID} target="_blank">{this.state.questClaimTrxID}</a></CModalTitle>
                   </CModalHeader>
                   <CModalBody>
-                    <CRow className="justify-content-md-center" key={this.state.transactionInfo} xs={{ gutterY: 5 }} md={{ gutterY: 5 }}>
+                    <CRow className="justify-content-md-center" key={this.state.questClaimTrxID} xs={{ gutterY: 5 }} md={{ gutterY: 5 }}>
                       {this.rewardDetail(JSON.stringify(this.state.transactionInfo))}
                     </CRow>
                   </CModalBody>

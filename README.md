@@ -1,6 +1,6 @@
 # Splinterlands Dashboard
-
-- View report multiple accounts (check collection power, ecr, quest rewards fast...) splinterlands. 
+- Splinterlands-Dashboard is open-source & no risk management app for your account.
+- View report multiple accounts (check collection power, ecr, quest rewards, collection card rentals fast...) splinterlands. 
 - Feel free to give suggestions for features/code refurbishing via github or on telegram chat.
 
 ## New Feature
@@ -38,14 +38,38 @@ Navigate to [http://localhost:3000](http://localhost:3000). The app will automat
 ## What's included
 
 Within the download you'll find the following directories and files, logically grouping common assets and providing both compiled and minified variations. You'll see something like this:
+- Create .accountData.json file (see /src/json/accountData-example.json)
+
 ```
 Example:
-REACT_APP_ACCOUNTS=username01,username02,username03
+[
+    {
+        "AccountName": "account00x",
+        "PostingKey": "" 
+    },
+    {
+        "AccountName": "account01x",
+        "PostingKey": ""
+    }
+]
+```
+
+```
+`AccountName="account00x"`: show information for account
+`PostingKey:"input your posting key"`: that's use for function copy to clipboard if you feel uncomfortable copying into your bot program else leave it blank.
+```
+
+- Create .env
+```
+PORT=3000
+CHOKIDAR_USEPOLLING=true
 REACT_APP_CP_ALERT=5000
 REACT_APP_ERC_ALERT=50
 REACT_APP_ERC_HIGH=90
-You can also use the file .env-example as a template, but remember to remove -example from the filename.
+REACT_APP_AUTO_UPDATE=30
+REACT_APP_API_DOMAIN_NAME=localhost:8080
 ```
+
 
 ## Support
 
